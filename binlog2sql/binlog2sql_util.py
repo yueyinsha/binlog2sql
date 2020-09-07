@@ -99,6 +99,8 @@ def parse_args():
                         help='Flashback data to start_position of start_file', default=False)
     parser.add_argument('--back-interval', dest='back_interval', type=float, default=1.0,
                         help="Sleep time between chunks of 1000 rollback sql. set it to 0 if do not need sleep")
+    parser.add_argument('--one-trans',  dest='one_transaction', type=int,
+                          help="set to 1 : only print one transaciton sql.",default=0)
     return parser
 
 
