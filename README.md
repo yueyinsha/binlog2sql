@@ -96,6 +96,8 @@ UPDATE `test`.`test3` SET `addtime`='2016-12-10 13:03:22', `data`='中文', `id`
 
 --back-interval -B模式下，每打印一千行回滚SQL，加一句SLEEP多少秒，如不想加SLEEP，请设为0。可选。默认1.0。
 
+
+
 **解析范围控制**
 
 --start-file 起始解析文件，只需文件名，无需全路径 。必须。
@@ -109,6 +111,8 @@ UPDATE `test`.`test3` SET `addtime`='2016-12-10 13:03:22', `data`='中文', `id`
 --start-datetime 起始解析时间，格式'%Y-%m-%d %H:%M:%S'。可选。默认不过滤。
 
 --stop-datetime 终止解析时间，格式'%Y-%m-%d %H:%M:%S'。可选。默认不过滤。
+
+--trans-number 解析的事务数量，可选。默认无限制
 
 **对象过滤**
 
