@@ -121,6 +121,87 @@ class Binlog2sql(object):
                 self.print_rollback_sql(filename=tmp_file)
         return True
 
+    def process_binlog_one_trans(self):
+        stream = BinLogStreamReader(connection_settings=self.conn_setting,
+                                    server_id=self.server_id,
+                                    log_file=self.start_file,
+                                    log_pos=self.start_pos,
+                                    only_schemas=self.only_schemas,
+                                    only_tables=self.only_tables,
+                                    resume_stream=True,
+                                    blocking=True)
+
+        sql_list=[]
+        flag_last_event = False
+        e_start_pos_begin = stream.log_pos
+        e_start_pos, last_pos = stream.log_pos, stream.log_pos
+        # to simplify code, we do not use flock for tmp_file.
+        tmp_file = create_unique_file(
+            '%s.%s' % (self.conn_setting['host'], self.conn_setting['port']))
+        with temp_open(tmp_file, "w") as f_tmp, self.connection as cursor:
+            for binlog_event in stream:
+                if not self.stop_never:
+                    try:
+                        event_time = datetime.datetime.fromtimestamp(
+                            binlog_event.timestamp)
+                    except OSError:
+                        event_time = datetime.datetime(1980, 1, 1, 0, 0)
+                    if (stream.log_file == self.end_file and stream.log_pos == self.end_pos) or                             (stream.log_file == self.eof_file and stream.log_pos == self.eof_pos):
+                        flag_last_event = True
+                        flag_last_event = True
+                    elif event_time < self.start_time:
+                        if not (isinstance(binlog_event, RotateEvent)
+                                or isinstance(binlog_event,
+                                              FormatDescriptionEvent)):
+                            last_pos = binlog_event.packet.log_pos
+                        continue
+                    elif (stream.log_file not in self.binlogList) or                             (self.end_pos and stream.log_file == self.end_file and stream.log_pos > self.end_pos) or                             (stream.log_file == self.eof_file and stream.log_pos > self.eof_pos) or                             (event_time >= self.stop_time):
+                        break
+                    # else:
+                    #     raise ValueError('unknown binlog file or position')
+
+                if isinstance(binlog_event,
+                              QueryEvent) and binlog_event.query == 'BEGIN':
+                    e_start_pos = last_pos
+                    if e_start_pos != e_start_pos_begin:
+                        break
+
+                if isinstance(binlog_event, QueryEvent) and not self.only_dml:
+                    sql = concat_sql_from_binlog_event(
+                        cursor=cursor,
+                        binlog_event=binlog_event,
+                        flashback=self.flashback,
+                        no_pk=self.no_pk)
+                    if sql:
+                        sql_list.append(sql)
+                elif is_dml_event(binlog_event) and event_type(
+                        binlog_event) in self.sql_type:
+                    for row in binlog_event.rows:
+                        sql = concat_sql_from_binlog_event(
+                            cursor=cursor,
+                            binlog_event=binlog_event,
+                            no_pk=self.no_pk,
+                            row=row,
+                            flashback=self.flashback,
+                            e_start_pos=e_start_pos)
+                        if self.flashback:
+                            f_tmp.write(sql + '\n')
+                        else:
+                            print(sql)
+                            sql_list.append(sql)
+
+                if not (isinstance(binlog_event, RotateEvent)
+                        or isinstance(binlog_event, FormatDescriptionEvent)):
+                    last_pos = binlog_event.packet.log_pos
+                if flag_last_event:
+                    break
+
+            stream.close()
+            f_tmp.close()
+            if self.flashback:
+                self.print_rollback_sql(filename=tmp_file)
+        return sql_list
+
     def print_rollback_sql(self, filename):
         """print rollback sql from tmp_file"""
         with open(filename, "rb") as f_tmp:
@@ -147,4 +228,7 @@ if __name__ == '__main__':
                             stop_time=args.stop_time, only_schemas=args.databases, only_tables=args.tables,
                             no_pk=args.no_pk, flashback=args.flashback, stop_never=args.stop_never,
                             back_interval=args.back_interval, only_dml=args.only_dml, sql_type=args.sql_type)
-    binlog2sql.process_binlog()
+    if args.one_transaction==1:
+        binlog2sql.process_binlog_one_trans()
+    else:         
+        binlog2sql.process_binlog()
