@@ -121,7 +121,7 @@ class Binlog2sql(object):
                 self.print_rollback_sql(filename=tmp_file)
         return True
 
-    def process_binlog_one_trans(self):
+    def process_binlog_transaction_number(self,transaction_number):
         stream = BinLogStreamReader(connection_settings=self.conn_setting,
                                     server_id=self.server_id,
                                     log_file=self.start_file,
@@ -134,6 +134,7 @@ class Binlog2sql(object):
         sql_list=[]
         flag_last_event = False
         e_start_pos_begin = stream.log_pos
+        trans_number=0
         e_start_pos, last_pos = stream.log_pos, stream.log_pos
         # to simplify code, we do not use flock for tmp_file.
         tmp_file = create_unique_file(
@@ -164,7 +165,9 @@ class Binlog2sql(object):
                               QueryEvent) and binlog_event.query == 'BEGIN':
                     e_start_pos = last_pos
                     if e_start_pos != e_start_pos_begin:
-                        break
+                        trans_number+=1
+                        if trans_number==transaction_number:
+                            break                 
 
                 if isinstance(binlog_event, QueryEvent) and not self.only_dml:
                     sql = concat_sql_from_binlog_event(
@@ -228,7 +231,7 @@ if __name__ == '__main__':
                             stop_time=args.stop_time, only_schemas=args.databases, only_tables=args.tables,
                             no_pk=args.no_pk, flashback=args.flashback, stop_never=args.stop_never,
                             back_interval=args.back_interval, only_dml=args.only_dml, sql_type=args.sql_type)
-    if args.one_transaction==1:
-        binlog2sql.process_binlog_one_trans()
+    if args.transaction_number!=0:
+        binlog2sql.process_binlog_transaction_number(args.transaction_number)
     else:         
         binlog2sql.process_binlog()
