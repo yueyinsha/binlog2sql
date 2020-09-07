@@ -76,6 +76,8 @@ def parse_args():
                           help="Start time. format %%Y-%%m-%%d %%H:%%M:%%S", default='')
     interval.add_argument('--stop-datetime', dest='stop_time', type=str,
                           help="Stop Time. format %%Y-%%m-%%d %%H:%%M:%%S;", default='')
+    interval.add_argument('--trans-number',  dest='transaction_number', type=int,
+                          help="transaction number",default=0)     
     parser.add_argument('--stop-never', dest='stop_never', action='store_true', default=False,
                         help="Continuously parse binlog. default: stop at the latest event when you start.")
     parser.add_argument('--help', dest='help', action='store_true', help='help information', default=False)
@@ -99,8 +101,6 @@ def parse_args():
                         help='Flashback data to start_position of start_file', default=False)
     parser.add_argument('--back-interval', dest='back_interval', type=float, default=1.0,
                         help="Sleep time between chunks of 1000 rollback sql. set it to 0 if do not need sleep")
-    parser.add_argument('--one-trans',  dest='one_transaction', type=int,
-                          help="set to 1 : only print one transaciton sql.",default=0)
     return parser
 
 
