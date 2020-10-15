@@ -26,14 +26,15 @@ class Binlog2sql(object):
                  stop_never=False,
                  back_interval=1.0,
                  only_dml=True,
-                 sql_type=None):
+                 sql_type=None,
+                 transaction_number=-1):
         """
         conn_setting: {'host': 127.0.0.1, 'port': 3306, 'user': user, 'passwd': passwd, 'charset': 'utf8'}
         """
 
         if not start_file:
             raise ValueError('Lack of parameter: start_file')
-
+        self.transaction_number=transaction_number
         self.conn_setting = connection_settings
         self.start_file = start_file
         self.start_pos = start_pos if start_pos else 4  # use binlog v4
@@ -84,86 +85,8 @@ class Binlog2sql(object):
                     'missing server_id in %s:%s' %
                     (self.conn_setting['host'], self.conn_setting['port']))
 
+
     def process_binlog(self):
-        stream = BinLogStreamReader(connection_settings=self.conn_setting,
-                                    server_id=self.server_id,
-                                    log_file=self.start_file,
-                                    log_pos=self.start_pos,
-                                    only_schemas=self.only_schemas,
-                                    only_tables=self.only_tables,
-                                    resume_stream=True,
-                                    blocking=True)
-
-        flag_last_event = False
-        e_start_pos, last_pos = stream.log_pos, stream.log_pos
-        # to simplify code, we do not use flock for tmp_file.
-        tmp_file = create_unique_file(
-            '%s.%s' % (self.conn_setting['host'], self.conn_setting['port']))
-        with temp_open(tmp_file, "w") as f_tmp, self.connection as cursor:
-            for binlog_event in stream:
-                if not self.stop_never:
-                    try:
-                        event_time = datetime.datetime.fromtimestamp(
-                            binlog_event.timestamp)
-                    except OSError:
-                        event_time = datetime.datetime(1980, 1, 1, 0, 0)
-                    if (stream.log_file == self.end_file and stream.log_pos == self.end_pos) or \
-                            (stream.log_file == self.eof_file and stream.log_pos == self.eof_pos):
-                        flag_last_event = True
-                    elif event_time < self.start_time:
-                        if not (isinstance(binlog_event, RotateEvent)
-                                or isinstance(binlog_event,
-                                              FormatDescriptionEvent)):
-                            last_pos = binlog_event.packet.log_pos
-                        continue
-                    elif (stream.log_file not in self.binlogList) or \
-                            (self.end_pos and stream.log_file == self.end_file and stream.log_pos > self.end_pos) or \
-                            (stream.log_file == self.eof_file and stream.log_pos > self.eof_pos) or \
-                            (event_time >= self.stop_time):
-                        break
-                    # else:
-                    #     raise ValueError('unknown binlog file or position')
-
-                if isinstance(binlog_event,
-                              QueryEvent) and binlog_event.query == 'BEGIN':
-                    e_start_pos = last_pos
-
-                if isinstance(binlog_event, QueryEvent) and not self.only_dml:
-                    sql = concat_sql_from_binlog_event(
-                        cursor=cursor,
-                        binlog_event=binlog_event,
-                        flashback=self.flashback,
-                        no_pk=self.no_pk)
-                    if sql:
-                        print(sql)
-                elif is_dml_event(binlog_event) and event_type(
-                        binlog_event) in self.sql_type:
-                    for row in binlog_event.rows:
-                        sql = concat_sql_from_binlog_event(
-                            cursor=cursor,
-                            binlog_event=binlog_event,
-                            no_pk=self.no_pk,
-                            row=row,
-                            flashback=self.flashback,
-                            e_start_pos=e_start_pos)
-                        if self.flashback:
-                            f_tmp.write(sql + '\n')
-                        else:
-                            print(sql)
-
-                if not (isinstance(binlog_event, RotateEvent)
-                        or isinstance(binlog_event, FormatDescriptionEvent)):
-                    last_pos = binlog_event.packet.log_pos
-                if flag_last_event:
-                    break
-
-            stream.close()
-            f_tmp.close()
-            if self.flashback:
-                self.print_rollback_sql(filename=tmp_file)
-        return True
-
-    def process_binlog_transaction_number(self, transaction_number):
         stream = BinLogStreamReader(connection_settings=self.conn_setting,
                                     server_id=self.server_id,
                                     log_file=self.start_file,
@@ -216,7 +139,7 @@ class Binlog2sql(object):
                     e_start_pos = last_pos
                     if e_start_pos != e_start_pos_begin:
                         trans_number += 1
-                        if trans_number == transaction_number:
+                        if trans_number == self.transaction_number:
                             break
 
                 if isinstance(binlog_event, QueryEvent) and not self.only_dml:
@@ -314,8 +237,7 @@ if __name__ == '__main__':
                             stop_never=args.stop_never,
                             back_interval=args.back_interval,
                             only_dml=args.only_dml,
-                            sql_type=args.sql_type)
-    if args.transaction_number != 0:
-        binlog2sql.process_binlog_transaction_number(args.transaction_number)
-    else:
-        binlog2sql.process_binlog()
+                            sql_type=args.sql_type,
+                            transaction_number=args.transaction_number)
+
+    binlog2sql.process_binlog()
