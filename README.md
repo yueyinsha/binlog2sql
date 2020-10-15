@@ -4,7 +4,7 @@
 
 2020-10-15 更新
 原版在生成回滚语句时，对临时文件按照block进行了读取，在Python3的特定情况下，会出现错误 UnicodeDecodeError: 'utf-8' codec can't decode byte 0x8b in position 0: invalid start byte
-为解决该问题，更新脚本为取整个文件来生成回滚语句。
+为解决该问题，更新脚本，如果遇到错误，则读取整个文件来生成回滚语句。
 
 binlog2sql
 ========================
