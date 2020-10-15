@@ -34,7 +34,7 @@ class Binlog2sql(object):
 
         if not start_file:
             raise ValueError('Lack of parameter: start_file')
-        self.transaction_number=transaction_number
+        self.transaction_number = transaction_number
         self.conn_setting = connection_settings
         self.start_file = start_file
         self.start_pos = start_pos if start_pos else 4  # use binlog v4
@@ -84,7 +84,6 @@ class Binlog2sql(object):
                 raise ValueError(
                     'missing server_id in %s:%s' %
                     (self.conn_setting['host'], self.conn_setting['port']))
-
 
     def process_binlog(self):
         stream = BinLogStreamReader(connection_settings=self.conn_setting,
@@ -180,39 +179,40 @@ class Binlog2sql(object):
 
     def print_rollback_sql(self, filename):
         """print rollback sql from tmp_file"""
-        
-        # update 
-        with open(filename, "rb") as f_tmp:
-            s = f_tmp.read()
-            if sys.version > '3':
-                s_decode = s.decode("utf-8")
-        s_list = s_decode.split("\n")
-        s_list.reverse()
-        batch_size = 1000
-        i = 0
-        for line in s_list:
-            print(line.rstrip())
-            if i >= batch_size:
-                i = 0
-                if self.back_interval:
-                    print('SELECT SLEEP(%s);' % self.back_interval)
-                else:
-                    i += 1
 
-#         with open(filename, "rb") as f_tmp:
-#             batch_size = 1000
-#             i = 0
-#             for line in reversed_lines(f_tmp):
-#                 print(line.rstrip())
-#                 if i >= batch_size:
-#                     i = 0
-#                     if self.back_interval:
-#                         print('SELECT SLEEP(%s);' % self.back_interval)
-#                 else:
-#                     i += 1
+        try:
+            with open(filename, "rb") as f_tmp:
+                batch_size = 1000
+                i = 0
+                for line in reversed_lines(f_tmp):
+                    print(line.rstrip())
+                    if i >= batch_size:
+                        i = 0
+                        if self.back_interval:
+                            print('SELECT SLEEP(%s);' % self.back_interval)
+                    else:
+                        i += 1
+        except:
+            with open(filename, "rb") as f_tmp:
+                s = f_tmp.read()
+                if sys.version > '3':
+                    s_decode = s.decode("utf-8")
+            s_list = s_decode.split("\n")
+            s_list.reverse()
+            batch_size = 1000
+            i = 0
+            for line in s_list:
+                print(line.rstrip())
+                if i >= batch_size:
+                    i = 0
+                    if self.back_interval:
+                        print('SELECT SLEEP(%s);' % self.back_interval)
+                    else:
+                        i += 1
 
     def __del__(self):
         pass
+
 
 if __name__ == '__main__':
     args = command_line_args(sys.argv[1:])
